@@ -1,0 +1,23 @@
+[package]
+name = "whirlpool"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "whirlpool"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.20.1"
+solana-program = "1.9.15"
+borsh = "0.9.1"
+borsh-derive = "0.9.1"
+hex = "0.4"

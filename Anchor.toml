@@ -1,0 +1,12 @@
+[programs.localnet]
+whirlpool = "AJjyLsVoEfhz7ds1ZM9RU44Zkf6bNakFC86PxXM4B7kT"
+
+[registry]
+url = "https://anchor.projectserum.com"
+
+[provider]
+cluster = "localnet"
+wallet = "/Users/brandon.johnson/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
