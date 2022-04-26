@@ -17,48 +17,61 @@ pub mod whirlpool {
     use super::*;
 
     pub fn create_pool(ctx: Context<CreatePool>, bump: u8, name: String, description: String) -> ProgramResult {
-        let pool = &mut ctx.accounts.pool_account;
-        let admin = &ctx.accounts.admin;
+        let pool_account = &mut ctx.accounts.pool_account;
+        let admin_account = &ctx.accounts.admin;
 
-        // require!(name.bytes().len() > 30, ArgumentValidationError::NameTooLarge);
-        // require!(description.bytes().len() > 200, ArgumentValidationError::DescriptionTooLarge);
+        pool_account.name = name;
+        pool_account.description = description;
+        pool_account.admin = <[u8; 32]>::try_from(admin_account.key.as_ref()).unwrap();
+        pool_account.bump = bump;
 
-        pool.name = name;
-        pool.description = description;
-        pool.admin = <[u8; 32]>::try_from(admin.key.as_ref()).unwrap();
-        pool.bump = bump;
-
-        let pda = <[u8; 32]>::try_from(pool.to_account_info().key.as_ref()).unwrap();
+        let pda = <[u8; 32]>::try_from(pool_account.to_account_info().key.as_ref()).unwrap();
 
         msg!("pool created with PDA {}", hex::encode(pda));
-        msg!("pool created with name {}", pool.name);
-        msg!("pool created with description {}", pool.description);
-        msg!("pool created with admin {}", hex::encode(pool.admin));
-        msg!("pool created with bump {}", pool.bump);
+        msg!("pool created with name {}", pool_account.name);
+        msg!("pool created with description {}", pool_account.description);
+        msg!("pool created by admin {}", hex::encode(pool_account.admin));
+        msg!("pool created with bump {}", pool_account.bump);
 
         Ok(())
     }
 
-    pub fn update_pool(ctx: Context<UpdatePool>, name: String, description: String) -> ProgramResult {
-        let pool = &mut ctx.accounts.pool_account;
+    pub fn update_pool(ctx: Context<UpdatePool>, bump: u8, name: String, description: String) -> ProgramResult {
+        let admin_account = &ctx.accounts.admin;
+        let pool_account = &mut ctx.accounts.pool_account;
 
-        // require!(name.bytes().len() > 30, ArgumentValidationError::NameTooLarge);
-        // require!(description.bytes().len() > 200, ArgumentValidationError::DescriptionTooLarge);
-
-        if name != pool.name {
-            pool.name = name;
+        if name != pool_account.name {
+            pool_account.name = name;
         }
 
-        if description != pool.description {
-            pool.description = description;
+        if description != pool_account.description {
+            pool_account.description = description;
         }
 
-        let pool_program_address = Pubkey::create_program_address(&[b"pool-account", &[pool.bump]], ctx.program_id);
+        let admin = <[u8; 32]>::try_from(admin_account.to_account_info().key.as_ref()).unwrap();
+        let pda = <[u8; 32]>::try_from(pool_account.key().as_ref()).unwrap();
 
-        msg!("pool created with PDA {}", pool_program_address.unwrap_or_default());
-        msg!("pool updated with name {}", pool.name);
-        msg!("pool updated with description {}", pool.description);
-        msg!("pool updated with bump {}", pool.bump);
+        msg!("pool updated with PDA {}", hex::encode(pda));
+        msg!("pool updated with name {}", pool_account.name);
+        msg!("pool updated with description {}", pool_account.description);
+        msg!("pool updated by admin {}", hex::encode(admin));
+        msg!("pool updated with bump {}", bump);
+
+        Ok(())
+    }
+
+    pub fn read_pool(ctx: Context<ReadPool>, bump: u8) -> ProgramResult {
+        let admin_account = &ctx.accounts.admin;
+        let pool_account = &mut ctx.accounts.pool_account;
+
+        let admin = <[u8; 32]>::try_from(admin_account.to_account_info().key.as_ref()).unwrap();
+        let pda = <[u8; 32]>::try_from(pool_account.key().as_ref()).unwrap();
+
+        msg!("pool read with PDA {}", hex::encode(pda));
+        msg!("pool read with name {}", pool_account.name);
+        msg!("pool read with description {}", pool_account.description);
+        msg!("pool read by admin {}", hex::encode(admin));
+        msg!("pool read with bump {}", bump);
 
         Ok(())
     }
@@ -81,10 +94,30 @@ pub struct CreatePool<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(bump:u8)]
 pub struct UpdatePool<'info> {
     #[account(mut)]
-    pub authority: Signer<'info>,
-    #[account(mut, seeds=[b"pool-account", authority.key().as_ref()], bump=pool_account.bump)]
+    pub admin: Signer<'info>,
+    #[account(
+        mut,
+        seeds=[b"pool-account", admin.key.as_ref()],
+        bump=bump
+    )]
+    pub pool_account: Account<'info, Pool>,
+    #[account(address=system_program::ID)]
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(bump:u8)]
+pub struct ReadPool<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(
+        mut,
+        seeds=[b"pool-account", admin.key.as_ref()],
+        bump=bump
+    )]
     pub pool_account: Account<'info, Pool>,
     #[account(address=system_program::ID)]
     pub system_program: Program<'info, System>,

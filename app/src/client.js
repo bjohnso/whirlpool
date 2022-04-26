@@ -44,12 +44,165 @@ var web3_js_1 = require("@solana/web3.js");
 anchor.setProvider(provider);
 var name = args['name'] || 'default_pool';
 var description = args['description'] || 'lorem ipsum';
+var func = args['function'] || null;
 var programId = new anchor.web3.PublicKey('AJjyLsVoEfhz7ds1ZM9RU44Zkf6bNakFC86PxXM4B7kT');
+var Functions = /** @class */ (function () {
+    function Functions() {
+    }
+    Functions.prototype.main = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!(func == 'createPool')) return [3 /*break*/, 2];
+                        return [4 /*yield*/, this.createPool()];
+                    case 1:
+                        _a.sent();
+                        return [3 /*break*/, 6];
+                    case 2:
+                        if (!(func == 'updatePool')) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.updatePool()];
+                    case 3:
+                        _a.sent();
+                        return [3 /*break*/, 6];
+                    case 4:
+                        if (!(func == 'readPool')) return [3 /*break*/, 6];
+                        return [4 /*yield*/, this.readPool()];
+                    case 5:
+                        _a.sent();
+                        _a.label = 6;
+                    case 6: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    Functions.prototype.createPool = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var json, idl, program, seeds, _a, pda, bump, accounts, signature, transaction;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        json = require("fs").readFileSync('../target/idl/whirlpool.json', "utf8");
+                        idl = JSON.parse(json);
+                        program = new anchor.Program(idl, programId);
+                        seeds = [
+                            anchor.utils.bytes.utf8.encode("pool-account"),
+                            wallet.publicKey.toBytes()
+                        ];
+                        return [4 /*yield*/, web3_js_1.PublicKey.findProgramAddress(seeds, program.programId)];
+                    case 1:
+                        _a = _b.sent(), pda = _a[0], bump = _a[1];
+                        console.log('wallet address', wallet.publicKey);
+                        console.log('pool account', pda, bump);
+                        accounts = {
+                            poolAccount: pda,
+                            admin: provider.wallet.publicKey,
+                            systemProgram: anchor.web3.SystemProgram.programId
+                        };
+                        return [4 /*yield*/, program.rpc.createPool(bump, name, description, {
+                                accounts: accounts,
+                                options: { commitment: "confirmed" },
+                                signers: []
+                            })];
+                    case 2:
+                        signature = _b.sent();
+                        return [4 /*yield*/, provider.connection.getTransaction(signature, { commitment: "confirmed" })];
+                    case 3:
+                        transaction = _b.sent();
+                        console.log(transaction.meta.logMessages);
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    Functions.prototype.updatePool = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var json, idl, program, seeds, _a, pda, bump, accounts, signature, transaction;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        json = require("fs").readFileSync('../target/idl/whirlpool.json', "utf8");
+                        idl = JSON.parse(json);
+                        program = new anchor.Program(idl, programId);
+                        seeds = [
+                            anchor.utils.bytes.utf8.encode("pool-account"),
+                            wallet.publicKey.toBytes()
+                        ];
+                        return [4 /*yield*/, web3_js_1.PublicKey.findProgramAddress(seeds, program.programId)];
+                    case 1:
+                        _a = _b.sent(), pda = _a[0], bump = _a[1];
+                        console.log('wallet address', wallet.publicKey);
+                        console.log('pool account', pda, bump);
+                        accounts = {
+                            poolAccount: pda,
+                            admin: provider.wallet.publicKey,
+                            systemProgram: anchor.web3.SystemProgram.programId
+                        };
+                        return [4 /*yield*/, program.rpc.updatePool(bump, name, description, {
+                                accounts: accounts,
+                                options: { commitment: "confirmed" },
+                                signers: []
+                            })];
+                    case 2:
+                        signature = _b.sent();
+                        return [4 /*yield*/, provider.connection.getTransaction(signature, { commitment: "confirmed" })];
+                    case 3:
+                        transaction = _b.sent();
+                        console.log(transaction.meta.logMessages);
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    Functions.prototype.readPool = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            var json, idl, program, seeds, _a, pda, bump, accounts, signature, transaction;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        json = require("fs").readFileSync('../target/idl/whirlpool.json', "utf8");
+                        idl = JSON.parse(json);
+                        program = new anchor.Program(idl, programId);
+                        seeds = [
+                            anchor.utils.bytes.utf8.encode("pool-account"),
+                            wallet.publicKey.toBytes()
+                        ];
+                        return [4 /*yield*/, web3_js_1.PublicKey.findProgramAddress(seeds, program.programId)];
+                    case 1:
+                        _a = _b.sent(), pda = _a[0], bump = _a[1];
+                        console.log('wallet address', wallet.publicKey);
+                        console.log('pool account', pda, bump);
+                        accounts = {
+                            poolAccount: pda,
+                            admin: provider.wallet.publicKey,
+                            systemProgram: anchor.web3.SystemProgram.programId
+                        };
+                        return [4 /*yield*/, program.rpc.readPool(bump, {
+                                accounts: accounts,
+                                options: { commitment: "confirmed" },
+                                signers: []
+                            })];
+                    case 2:
+                        signature = _b.sent();
+                        return [4 /*yield*/, provider.connection.getTransaction(signature, { commitment: "confirmed" })];
+                    case 3:
+                        transaction = _b.sent();
+                        console.log(transaction.meta.logMessages);
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    return Functions;
+}());
 function main() {
     return __awaiter(this, void 0, void 0, function () {
+        var functions;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, createPool()];
+                case 0:
+                    functions = new Functions();
+                    return [4 /*yield*/, functions.main()];
                 case 1:
                     _a.sent();
                     return [2 /*return*/];
@@ -57,69 +210,5 @@ function main() {
         });
     });
 }
-function createPool() {
-    return __awaiter(this, void 0, void 0, function () {
-        var json, idl, program, seeds, _a, pda, bump, accounts, signature, transaction;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
-                case 0:
-                    json = require("fs").readFileSync('../target/idl/whirlpool.json', "utf8");
-                    idl = JSON.parse(json);
-                    program = new anchor.Program(idl, programId);
-                    seeds = [
-                        anchor.utils.bytes.utf8.encode("pool-account"),
-                        wallet.publicKey.toBytes()
-                    ];
-                    return [4 /*yield*/, web3_js_1.PublicKey.findProgramAddress(seeds, program.programId)];
-                case 1:
-                    _a = _b.sent(), pda = _a[0], bump = _a[1];
-                    console.log('wallet address', wallet.publicKey);
-                    console.log('pool account', pda, bump);
-                    accounts = {
-                        poolAccount: pda,
-                        admin: provider.wallet.publicKey,
-                        systemProgram: anchor.web3.SystemProgram.programId
-                    };
-                    return [4 /*yield*/, program.rpc.createPool(bump, name, description, {
-                            accounts: accounts,
-                            options: { commitment: "confirmed" },
-                            signers: []
-                        })];
-                case 2:
-                    signature = _b.sent();
-                    return [4 /*yield*/, provider.connection.getTransaction(signature, { commitment: "confirmed" })];
-                case 3:
-                    transaction = _b.sent();
-                    console.log(transaction.meta.logMessages);
-                    return [2 /*return*/];
-            }
-        });
-    });
-}
-// async function updatePool() {
-//     const json = require("fs").readFileSync('../target/idl/whirlpool.json', 'utf8');
-//
-//     const idl = JSON.parse(json);
-//
-//     const program = new anchor.Program(idl, programId);
-//
-//     const accounts = {
-//         poolAccount: poolAccount.publicKey,
-//         authority: provider.wallet.publicKey,
-//         systemProgram: anchor.web3.SystemProgram.programId
-//     };
-//
-//     const signature = await program.rpc.updatePool(name, description, {
-//        accounts,
-//        options: { commitment: "confirmed" },
-//        signers: [provider.wallet]
-//     });
-//
-//     let transaction = await provider.connection.getTransaction(
-//         signature, { commitment: "confirmed" }
-//     );
-//
-//     console.log(transaction.meta.logMessages);
-// }
 console.log('Running client...');
 main().then(function () { return console.log("Client finished"); });
