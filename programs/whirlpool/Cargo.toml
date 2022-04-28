@@ -16,8 +16,8 @@ cpi = ["no-entrypoint"]
 default = []
 
 [dependencies]
-anchor-lang = "0.20.1"
-solana-program = "1.9.15"
-borsh = "0.9.1"
-borsh-derive = "0.9.1"
-hex = "0.4"
+anchor-lang = "0.24.2"
+anchor-spl = "0.24.2"
+spl-token = "3.3.0"
+solana-program = "1.9.18"
+hex = "0.4.3"
