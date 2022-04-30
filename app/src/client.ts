@@ -1,9 +1,12 @@
 const args = require('minimist')(process.argv.slice(2));
-const anchor = require("@project-serum/anchor");
-const provider = anchor.Provider.env();
-const wallet = provider.wallet;
 
 import { PublicKey } from '@solana/web3.js';
+
+const anchor = require("@project-serum/anchor");
+const spl = require("@solana/spl-token");
+
+const provider = anchor.Provider.env();
+const wallet = provider.wallet;
 
 anchor.setProvider(provider);
 
@@ -15,19 +18,25 @@ const programId = new anchor.web3.PublicKey('AJjyLsVoEfhz7ds1ZM9RU44Zkf6bNakFC86
 
 class Functions {
     async main() {
+
+        console.log(func);
+
         switch (func) {
             case 'createPool':
-                await this.createPool();
+                await this.tryCreatePool();
+                break;
             case 'updatePool':
-                await this.updatePool();
+                await this.tryUpdatePool();
+                break;
             case 'readPool':
-                await this.readPool();
+                await this.tryReadPool();
+                break;
             case 'deposit':
-                await this.deposit();
+                await this.tryDeposit();
         }
     }
 
-    async createPool() {
+    async tryCreatePool() {
         const json = require("fs").readFileSync('../target/idl/whirlpool.json', "utf8");
 
         const idl = JSON.parse(json);
@@ -66,7 +75,7 @@ class Functions {
         console.log(transaction.meta.logMessages);
     }
 
-    async updatePool() {
+    async tryUpdatePool() {
         const json = require("fs").readFileSync('../target/idl/whirlpool.json', "utf8");
 
         const idl = JSON.parse(json);
@@ -106,7 +115,7 @@ class Functions {
         console.log(transaction.meta.logMessages);
     }
 
-    async readPool() {
+    async tryReadPool() {
         const json = require("fs").readFileSync('../target/idl/whirlpool.json', "utf8");
 
         const idl = JSON.parse(json);
@@ -125,7 +134,7 @@ class Functions {
 
         const accounts = {
             poolAccount: pda,
-            admin: provider.wallet.publicKey,
+            admin: wallet.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId
         };
 
@@ -144,11 +153,15 @@ class Functions {
         console.log(transaction.meta.logMessages);
     }
 
-    async deposit() {
+    async tryDeposit() {
+        const [user, tokenAccount, mint] = await this.createUserTokenAccount();
+        console.log(`User account: ${user.publicKey}`, `TokenAccount: ${tokenAccount}`);
+
+        let [_, amount] = await this.readTokenAccount(tokenAccount);
+        console.log(`User token amount: ${amount}`);
+
         const json = require("fs").readFileSync('../target/idl/whirlpool.json', "utf8");
-
         const idl = JSON.parse(json);
-
         const program = new anchor.Program(idl, programId);
 
         const poolSeeds = [
@@ -156,39 +169,50 @@ class Functions {
             wallet.publicKey.toBytes()
         ];
 
+        const [ poolPDA, poolBump ] = await PublicKey.findProgramAddress(poolSeeds, program.programId);
+
         const stateSeeds = [
             anchor.utils.bytes.utf8.encode("state-account"),
-            wallet.publicKey.toBytes(),
-            wallet.publicKey.toBytes(),
-            // MINT
+            user.publicKey.toBytes(),
+            mint.toBytes(),
         ];
+
+        const [ statePDA, stateBump ] = await PublicKey.findProgramAddress(stateSeeds, program.programId);
 
         const escrowSeeds = [
             anchor.utils.bytes.utf8.encode("escrow-account"),
-            wallet.publicKey.toBytes()
-            // MINT
+            user.publicKey.toBytes(),
+            mint.toBytes(),
         ];
 
-        const [ poolPDA, poolBump ] = await PublicKey.findProgramAddress(poolSeeds, program.programId);
-        const [ statePDA, stateBump ] = await PublicKey.findProgramAddress(stateSeeds, program.programId);
         const [ escrowPDA, escrowBump ] = await PublicKey.findProgramAddress(escrowSeeds, program.programId);
 
+        console.log('STATE PDA', statePDA, stateBump);
+        console.log('ESCROW PDA', escrowPDA, escrowBump);
+        console.log('POOL PDA', poolPDA, poolBump);
+
         const accounts = {
-            user: provider.wallet.publicKey,
-            admin: provider.wallet.publicKey,
-            donorAccount: provider.wallet.publicKey,
-            poolAccount: poolPDA,
+            user: user.publicKey,
+            donorAccount: tokenAccount,
+            admin: wallet.publicKey,
+            mint: mint,
             stateAccount: statePDA,
             escrowAccount: escrowPDA,
-            systemProgram: anchor.web3.SystemProgram.programId
+            poolAccount: poolPDA,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: spl.TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY
         };
 
-        const signature = await program.rpc.readPool(
-            // bump,
+        const signature = await program.rpc.deposit(
+            stateBump,
+            escrowBump,
+            poolBump,
+            new anchor.BN(10),
             {
                 accounts,
                 options: { commitment: "confirmed" },
-                signers: []
+                signers: [user]
             });
 
         let transaction = await provider.connection.getTransaction(
@@ -196,10 +220,111 @@ class Functions {
         );
 
         console.log(transaction.meta.logMessages);
+
+        [_, amount] = await this.readTokenAccount(tokenAccount);
+        console.log(`User token amount: ${amount}`);
+
+        [_, amount] = await this.readTokenAccount(escrowPDA);
+        console.log(`Escrow token amount: ${amount}`);
     }
 
-    async createMintAccount() {
-        // TODO: Create Mint Account
+    private async createMintAccount() {
+        const tokenMint = new anchor.web3.Keypair();
+        const lamportsForMint = await provider.connection.getMinimumBalanceForRentExemption(spl.MintLayout.span);
+
+        let transaction = new anchor.web3.Transaction();
+
+        // Create dummy Mint
+        transaction.add(
+            anchor.web3.SystemProgram.createAccount({
+                programId: spl.TOKEN_PROGRAM_ID,
+                space: spl.MintLayout.span,
+                fromPubkey: wallet.publicKey,
+                newAccountPubkey: tokenMint.publicKey,
+                lamports: lamportsForMint
+            })
+        );
+
+        // Allocate lamports to mint wallet
+        transaction.add(
+            spl.createInitializeMintInstruction(
+                tokenMint.publicKey,
+                6,
+                wallet.publicKey,
+                wallet.publicKey,
+                spl.TOKEN_PROGRAM_ID,
+            )
+        );
+
+        await provider.send(transaction, [tokenMint]);
+
+        console.log(`Created new mint account at ${tokenMint.publicKey}`);
+
+        return tokenMint.publicKey;
+    }
+
+    private async createUserTokenAccount() {
+        const mint = await this.createMintAccount();
+        const user = new anchor.web3.Keypair();
+        const lamports = 5 * anchor.web3.LAMPORTS_PER_SOL;
+
+        let fundUserTransaction = new anchor.web3.Transaction();
+
+        fundUserTransaction.add(anchor.web3.SystemProgram.transfer({
+            fromPubkey: wallet.publicKey,
+            toPubkey: user.publicKey,
+            lamports
+        }));
+
+        await provider.send(fundUserTransaction);
+
+        console.log(`New User ${user.publicKey} funded with ${lamports} lamports`);
+
+        const userAssociatedTokenAccount = await spl.getAssociatedTokenAddress(
+            mint,
+            user.publicKey,
+            false,
+            spl.TOKEN_PROGRAM_ID,
+            spl.ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+
+        let fundTokenAccountTransaction = new anchor.web3.Transaction();
+
+        fundTokenAccountTransaction.add(
+            spl.createAssociatedTokenAccountInstruction(
+                user.publicKey,
+                userAssociatedTokenAccount,
+                user.publicKey,
+                mint,
+                spl.TOKEN_PROGRAM_ID,
+                spl.ASSOCIATED_TOKEN_PROGRAM_ID
+            )
+        );
+
+        fundTokenAccountTransaction.add(
+            spl.createMintToInstruction(
+                mint,
+                userAssociatedTokenAccount,
+                wallet.publicKey,
+                1000,
+                [],
+                spl.TOKEN_PROGRAM_ID
+            )
+        );
+
+        await provider.send(fundTokenAccountTransaction, [user]);
+
+        console.log(`New associated account ${userAssociatedTokenAccount} for mint ${mint})}`);
+
+        return [user, userAssociatedTokenAccount, mint];
+    }
+
+    private async readTokenAccount (accountPublicKey: PublicKey) {
+        const tokenAccountInfo = await provider.connection.getAccountInfo(accountPublicKey);
+        const data = Buffer.from(tokenAccountInfo.data);
+        const accountInfo = spl.AccountLayout.decode(data);
+
+        return [accountInfo, accountInfo.amount];
     }
 }
 
