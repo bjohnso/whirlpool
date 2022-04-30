@@ -1,11 +1,15 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
+mod validation;
+
 extern crate core;
 
 use std::{convert::TryFrom};
 use anchor_spl::{associated_token::AssociatedToken, token::{CloseAccount, Mint, Token, TokenAccount, Transfer}};
 use anchor_lang::{prelude::*, context::CpiContext};
+use error::*;
+use validation::*;
 
 use solana_program::{
     system_program,
@@ -136,183 +140,53 @@ pub mod whirlpool {
         Ok(())
     }
 
-    pub fn withdraw(ctx: Context<Deposit>, state_bump: u8, escrow_bump: u8, pool_bump: u8, token_amount: u64) -> ProgramResult {
-        if EscrowStage::to_escrow_stage(ctx.accounts.state_account.stage)? != EscrowStage::Deposited {
-            msg!("Escrow Stage {} is invalid", ctx.accounts.state_account.stage);
-            return Err(ErrorCode::StageInvalid.into());
-        }
+    pub fn stake(ctx: Context<Stake>, state_bump: u8, escrow_bump: u8, pool_bump: u8) -> ProgramResult {
+        let state_account = &mut ctx.accounts.state_account;
 
-        // TODO: TRANSFER OUT OF ESCROW
+        let state_pda = <[u8; 32]>::try_from(state_account.key().as_ref()).unwrap();
+        let state_sender = <[u8; 32]>::try_from(state_account.sender.as_ref()).unwrap();
+        let state_receiver = <[u8; 32]>::try_from(state_account.receiver.as_ref()).unwrap();
+        let state_mint = <[u8; 32]>::try_from(state_account.mint.as_ref()).unwrap();
+        let state_escrow = <[u8; 32]>::try_from(state_account.escrow.as_ref()).unwrap();
+
+        msg!("escrow state withdrawal with PDA {}", hex::encode(state_pda));
+        msg!("escrow state withdrawal with sender {}", hex::encode(state_sender));
+        msg!("escrow state withdrawal with receiver {}", hex::encode(state_receiver));
+        msg!("escrow state withdrawal with mint {}", hex::encode(state_mint));
+        msg!("escrow state withdrawal with escrow {}", hex::encode(state_escrow));
+        msg!("escrow state withdrawal with token amount {}", state_account.token_amount);
+
+        let user_key = ctx.accounts.sender.key;
+        let mint_key = ctx.accounts.mint.key().clone();
+        let state_bump_bytes = state_bump.to_le_bytes();
+
+        let vector = vec![
+            b"state-account".as_ref(),
+            user_key.as_ref(),
+            mint_key.as_ref(),
+            state_bump_bytes.as_ref()
+        ];
+
+        let signer_seeds = vec![vector.as_slice()];
+
+        let transfer_instruction = Transfer {
+            from: ctx.accounts.escrow_account.to_account_info(),
+            to: ctx.accounts.receiver.to_account_info(),
+            authority: state_account.to_account_info()
+        };
+
+        let cpi_context= CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            transfer_instruction,
+            signer_seeds.as_slice()
+        );
+
+        anchor_spl::token::transfer(cpi_context, state_account.token_amount)?;
+
+        state_account.stage = EscrowStage::Complete.to_u8();
 
         Ok(())
     }
-}
-
-#[derive(Accounts)]
-pub struct CreatePool<'info> {
-    #[account(mut)]
-    pub admin: AccountInfo<'info>,
-
-    #[account(
-        init,
-        payer=admin,
-        space=8 + 30 + 100 + 1,
-        seeds=[b"pool-account", admin.key.as_ref()],
-        bump
-    )]
-    pub pool_account: Account<'info, Pool>,
-
-    #[account(address=system_program::ID)]
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(bump:u8)]
-pub struct UpdatePool<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(
-        mut,
-        seeds=[b"pool-account", admin.key.as_ref()],
-        bump=bump
-    )]
-    pub pool_account: Account<'info, Pool>,
-    #[account(address=system_program::ID)]
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(bump:u8)]
-pub struct ReadPool<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(
-        mut,
-        seeds=[b"pool-account", admin.key.as_ref()],
-        bump=bump
-    )]
-    pub pool_account: Account<'info, Pool>,
-    #[account(address=system_program::ID)]
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(state_bump: u8, escrow_bump: u8, pool_bump: u8, token_amount: u64)]
-pub struct Deposit<'info> {
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    #[account(
-        mut,
-        constraint=donor_account.owner == user.key(),
-        constraint=donor_account.mint == mint.key()
-    )]
-    pub donor_account: Account<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub admin: AccountInfo<'info>,
-
-    pub mint: Account<'info, Mint>,
-
-    #[account(
-        init,
-        payer=user,
-        space=1000,
-        seeds=[b"state-account", user.key.as_ref(), mint.key().as_ref()],
-        bump
-    )]
-    pub state_account: Account<'info, EscrowState>,
-
-    #[account(
-        init,
-        payer=user,
-        seeds=[b"escrow-account", user.key.as_ref(), mint.key().as_ref()],
-        token::mint=mint,
-        token::authority=state_account,
-        bump
-    )]
-    pub escrow_account: Account<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        seeds=[b"pool-account", admin.key.as_ref()],
-        bump=pool_bump
-    )]
-    pub pool_account: Account<'info, Pool>,
-
-    pub token_program: Program<'info, Token>,
-
-    pub system_program: Program<'info, System>,
-
-    pub rent: Sysvar<'info, Rent>
-}
-
-#[derive(Accounts)]
-#[instruction(state_bump: u8, escrow_bump: u8, pool_bump: u8, token_amount: u64)]
-pub struct Withdraw<'info> {
-    #[account(mut)]
-    pub user: AccountInfo<'info>,
-
-    #[account(
-        init_if_needed,
-        payer=pool_account,
-        associated_token::mint = mint,
-        associated_token::authority == pool_account
-    )]
-    pub recipient_account: Account<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub admin: AccountInfo<'info>,
-
-    pub mint: Account<'info, Mint>,
-
-    #[account(
-        mut,
-        has_one=user,
-        has_one=pool_account,
-        has_one=mint,
-        seeds=[b"state-account", user.key.as_ref(), mint.key().as_ref()],
-        bump=state_bump
-    )]
-    pub state_account: Account<'info, EscrowState>,
-
-    #[account(
-        mut,
-        seeds=[b"escrow-account", user.key.as_ref(), mint.key().as_ref()],
-        bump=escrow_bump
-    )]
-    pub escrow_account: Account<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        seeds=[b"pool-account", admin.key.as_ref()],
-        bump=pool_bump
-    )]
-    pub pool_account: Account<'info, Pool>,
-
-    pub token_program: Program<'info, Token>,
-
-    pub system_program: Program<'info, System>,
-
-    pub rent: Sysvar<'info, Rent>
-}
-
-#[account]
-pub struct Pool {
-    pub name: String,
-    pub description: String,
-    pub admin: [u8; 32],
-    pub bump: u8,
-}
-
-#[account]
-pub struct EscrowState {
-    sender: Pubkey,
-    receiver: Pubkey,
-    mint: Pubkey,
-    escrow: Pubkey,
-    token_amount: u64,
-    stage: u8
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -335,10 +209,4 @@ impl EscrowStage {
             _ => None
         }
     }
-}
-
-#[error]
-pub enum ErrorCode {
-    #[msg("Stage is invalid")]
-    StageInvalid
 }
