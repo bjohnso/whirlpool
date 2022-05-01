@@ -16,7 +16,7 @@ use solana_program::{
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
     #[account(mut)]
-    pub admin: AccountInfo<'info>,
+    pub admin: Signer<'info>,
 
     #[account(
         init,
@@ -27,8 +27,23 @@ pub struct CreatePool<'info> {
     )]
     pub pool_account: Account<'info, Pool>,
 
+    #[account(
+        init,
+        payer=admin,
+        seeds=[b"pool-token-account", admin.key.as_ref(), mint.key().as_ref()],
+        bump,
+        token::mint=mint,
+        token::authority=pool_account,
+    )]
+    pub token_account: Account<'info, TokenAccount>,
+
+    pub mint: Account<'info, Mint>,
+
     #[account(address=system_program::ID)]
     pub system_program: Program<'info, System>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Program<'info, Token>,
+    pub rent: Sysvar<'info, Rent>
 }
 
 #[derive(Accounts)]
@@ -36,12 +51,14 @@ pub struct CreatePool<'info> {
 pub struct UpdatePool<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
+
     #[account(
         mut,
         seeds=[b"pool-account", admin.key.as_ref()],
         bump=bump
     )]
     pub pool_account: Account<'info, Pool>,
+
     #[account(address=system_program::ID)]
     pub system_program: Program<'info, System>,
 }
@@ -51,12 +68,14 @@ pub struct UpdatePool<'info> {
 pub struct ReadPool<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
+
     #[account(
         mut,
         seeds=[b"pool-account", admin.key.as_ref()],
         bump=bump
     )]
     pub pool_account: Account<'info, Pool>,
+
     #[account(address=system_program::ID)]
     pub system_program: Program<'info, System>,
 }
@@ -83,7 +102,7 @@ pub struct Deposit<'info> {
         init,
         payer=user,
         space=1000,
-        seeds=[b"state-account", user.key.as_ref(), mint.key().as_ref()],
+        seeds=[b"state-account", user.key.as_ref()],
         bump
     )]
     pub state_account: Account<'info, EscrowState>,
@@ -91,7 +110,7 @@ pub struct Deposit<'info> {
     #[account(
         init,
         payer=user,
-        seeds=[b"escrow-account", user.key.as_ref(), mint.key().as_ref()],
+        seeds=[b"escrow-account", user.key.as_ref()],
         token::mint=mint,
         token::authority=state_account,
         bump
@@ -155,12 +174,10 @@ pub struct Stake<'info> {
     )]
     pub receiver: Account<'info, Pool>,
 
-    pub token_program: Program<'info, Token>,
-
-    pub associated_token_program: Program<'info, AssociatedToken>,
-
+    #[account(address=system_program::ID)]
     pub system_program: Program<'info, System>,
-
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub rent: Sysvar<'info, Rent>
 }
 
@@ -169,6 +186,8 @@ pub struct Pool {
     pub name: String,
     pub description: String,
     pub admin: [u8; 32],
+    pub mint: [u8; 32],
+    pub token_account: [u8; 32],
     pub bump: u8,
 }
 

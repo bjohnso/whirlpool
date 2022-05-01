@@ -26,20 +26,26 @@ declare_id!("AJjyLsVoEfhz7ds1ZM9RU44Zkf6bNakFC86PxXM4B7kT");
 pub mod whirlpool {
     use super::*;
 
-    pub fn create_pool(ctx: Context<CreatePool>, bump: u8, name: String, description: String) -> ProgramResult {
+    pub fn create_pool(ctx: Context<CreatePool>, pool_bump: u8, pool_token_bump: u8, name: String, description: String) -> ProgramResult {
         let pool_account = &mut ctx.accounts.pool_account;
+        let token_account = &ctx.accounts.token_account;
+        let mint = &ctx.accounts.mint;
         let admin_account = &ctx.accounts.admin;
 
         pool_account.name = name;
         pool_account.description = description;
+        pool_account.token_account = <[u8; 32]>::try_from(token_account.key().as_ref()).unwrap();
+        pool_account.mint = <[u8; 32]>::try_from(mint.key().as_ref()).unwrap();
         pool_account.admin = <[u8; 32]>::try_from(admin_account.key.as_ref()).unwrap();
-        pool_account.bump = bump;
+        pool_account.bump = pool_bump;
 
         let pda = <[u8; 32]>::try_from(pool_account.to_account_info().key.as_ref()).unwrap();
 
         msg!("pool created with PDA {}", hex::encode(pda));
         msg!("pool created with name {}", pool_account.name);
         msg!("pool created with description {}", pool_account.description);
+        msg!("pool created with token account {}", hex::encode(pool_account.token_account));
+        msg!("pool created with mint {}", hex::encode(pool_account.mint));
         msg!("pool created by admin {}", hex::encode(pool_account.admin));
         msg!("pool created with bump {}", pool_account.bump);
 
