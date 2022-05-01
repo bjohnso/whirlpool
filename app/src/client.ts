@@ -34,6 +34,8 @@ class Functions {
                 break;
             case 'deposit':
                 await this.tryDeposit();
+            case 'stake':
+                await this.tryStake();
         }
     }
 
@@ -248,6 +250,44 @@ class Functions {
 
         [_, amount] = await this.readTokenAccount(escrowPDA);
         console.log(`Escrow token amount: ${amount}`);
+    }
+
+    async tryStake() {
+        const json = require("fs").readFileSync('../target/idl/whirlpool.json', "utf8");
+
+        const idl = JSON.parse(json);
+
+        const program = new anchor.Program(idl, programId);
+
+        const seeds = [
+            anchor.utils.bytes.utf8.encode("pool-account"),
+            wallet.publicKey.toBytes()
+        ];
+
+        const [ pda, bump ] = await PublicKey.findProgramAddress(seeds, program.programId);
+
+        console.log('wallet address', wallet.publicKey);
+        console.log('pool account', pda, bump);
+
+        const accounts = {
+            poolAccount: pda,
+            admin: wallet.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId
+        };
+
+        const signature = await program.rpc.stake(
+            bump,
+            {
+                accounts,
+                options: { commitment: "confirmed" },
+                signers: []
+            });
+
+        let transaction = await provider.connection.getTransaction(
+            signature, { commitment: "confirmed" }
+        );
+
+        console.log(transaction.meta.logMessages);
     }
 
     private async createMintAccount(): Promise<PublicKey> {

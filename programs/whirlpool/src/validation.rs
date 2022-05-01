@@ -21,7 +21,7 @@ pub struct CreatePool<'info> {
     #[account(
         init,
         payer=admin,
-        space=8 + 30 + 100 + 1,
+        space=1000,
         seeds=[b"pool-account", admin.key.as_ref()],
         bump
     )]
@@ -124,79 +124,46 @@ pub struct Deposit<'info> {
     )]
     pub pool_account: Account<'info, Pool>,
 
-    pub token_program: Program<'info, Token>,
-
+    #[account(address=system_program::ID)]
     pub system_program: Program<'info, System>,
-
+    pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>
 }
 
 #[derive(Accounts)]
-#[instruction(state_bump: u8, escrow_bump: u8, pool_bump: u8)]
+#[instruction(pool_bump: u8)]
 pub struct Stake<'info> {
     #[account(mut)]
-    pub sender: AccountInfo<'info>,
-
-    #[account(
-        init_if_needed,
-        payer=receiver,
-        associated_token::mint=mint,
-        associated_token::authority=receiver,
-    )]
-    pub recipient_account: Account<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub admin: AccountInfo<'info>,
-
-    pub mint: Account<'info, Mint>,
-
-    #[account(
-        mut,
-        seeds=[b"state-account", sender.key.as_ref(), mint.key().as_ref()],
-        has_one=sender,
-        has_one=receiver,
-        has_one=mint,
-        bump=state_bump
-    )]
-    pub state_account: Account<'info, EscrowState>,
-
-    #[account(
-        mut,
-        seeds=[b"escrow-account", sender.key.as_ref(), mint.key().as_ref()],
-        bump=escrow_bump
-    )]
-    pub escrow_account: Account<'info, TokenAccount>,
+    pub admin: Signer<'info>,
 
     #[account(
         mut,
         seeds=[b"pool-account", admin.key.as_ref()],
         bump=pool_bump
     )]
-    pub receiver: Account<'info, Pool>,
+    pub pool_account: Account<'info, Pool>,
 
     #[account(address=system_program::ID)]
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub rent: Sysvar<'info, Rent>
 }
 
 #[account]
 pub struct Pool {
     pub name: String,
     pub description: String,
-    pub admin: [u8; 32],
-    pub mint: [u8; 32],
-    pub token_account: [u8; 32],
-    pub bump: u8,
+    pub admin: Pubkey,
+    pub mint: Pubkey,
+    pub state_account: Pubkey,
+    pub token_account: Pubkey,
+    pub state_account_bump: u8,
+    pub token_account_bump: u8,
 }
 
 #[account]
 pub struct EscrowState {
-    pub sender: Pubkey,
-    pub receiver: Pubkey,
-    pub mint: Pubkey,
+    pub user: Pubkey,
     pub escrow: Pubkey,
+    pub escrow_bump: u8,
     pub token_amount: u64,
     pub stage: u8
 }

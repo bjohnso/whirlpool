@@ -34,20 +34,24 @@ pub mod whirlpool {
 
         pool_account.name = name;
         pool_account.description = description;
-        pool_account.token_account = <[u8; 32]>::try_from(token_account.key().as_ref()).unwrap();
-        pool_account.mint = <[u8; 32]>::try_from(mint.key().as_ref()).unwrap();
-        pool_account.admin = <[u8; 32]>::try_from(admin_account.key.as_ref()).unwrap();
-        pool_account.bump = pool_bump;
+        pool_account.admin = admin_account.key.clone();
+        pool_account.mint = mint.key().clone();
+        pool_account.token_account = token_account.key().clone();
+        pool_account.token_account_bump = pool_token_bump;
 
         let pda = <[u8; 32]>::try_from(pool_account.to_account_info().key.as_ref()).unwrap();
+        let token_account = <[u8; 32]>::try_from(token_account.key().as_ref()).unwrap();
+        let mint = <[u8; 32]>::try_from(mint.key().as_ref()).unwrap();
+        let admin = <[u8; 32]>::try_from(admin_account.key.as_ref()).unwrap();
 
         msg!("pool created with PDA {}", hex::encode(pda));
         msg!("pool created with name {}", pool_account.name);
         msg!("pool created with description {}", pool_account.description);
-        msg!("pool created with token account {}", hex::encode(pool_account.token_account));
-        msg!("pool created with mint {}", hex::encode(pool_account.mint));
-        msg!("pool created by admin {}", hex::encode(pool_account.admin));
-        msg!("pool created with bump {}", pool_account.bump);
+        msg!("pool created by admin {}", hex::encode(admin));
+        msg!("pool created with mint {}", hex::encode(mint));
+        msg!("pool created with token account {}", hex::encode(token_account));
+        msg!("pool created with bump {}", pool_bump);
+        msg!("pool created with token account bump {}", pool_account.token_account_bump);
 
         Ok(())
     }
@@ -94,34 +98,30 @@ pub mod whirlpool {
 
     pub fn deposit(ctx: Context<Deposit>, state_bump: u8, escrow_bump: u8, pool_bump: u8, token_amount: u64) -> ProgramResult {
         let state_account = &mut ctx.accounts.state_account;
+        let pool_account = &mut ctx.accounts.pool_account;
 
-        state_account.sender = ctx.accounts.user.key().clone();
-        state_account.receiver = ctx.accounts.pool_account.key().clone();
-        state_account.mint = ctx.accounts.mint.key().clone();
+        state_account.user = ctx.accounts.user.key().clone();
         state_account.escrow = ctx.accounts.escrow_account.key().clone();
         state_account.token_amount = token_amount;
 
+        pool_account.state_account = state_account.key().clone();
+        pool_account.state_account_bump = state_bump;
+
         let state_pda = <[u8; 32]>::try_from(state_account.key().as_ref()).unwrap();
-        let state_sender = <[u8; 32]>::try_from(state_account.sender.as_ref()).unwrap();
-        let state_receiver = <[u8; 32]>::try_from(state_account.receiver.as_ref()).unwrap();
-        let state_mint = <[u8; 32]>::try_from(state_account.mint.as_ref()).unwrap();
+        let state_user = <[u8; 32]>::try_from(state_account.user.as_ref()).unwrap();
         let state_escrow = <[u8; 32]>::try_from(state_account.escrow.as_ref()).unwrap();
 
         msg!("escrow state created with PDA {}", hex::encode(state_pda));
-        msg!("escrow state created with sender {}", hex::encode(state_sender));
-        msg!("escrow state created with receiver {}", hex::encode(state_receiver));
-        msg!("escrow state created with mint {}", hex::encode(state_mint));
+        msg!("escrow state created with user {}", hex::encode(state_user));
         msg!("escrow state created with escrow {}", hex::encode(state_escrow));
         msg!("escrow state created with token amount {}", state_account.token_amount);
 
         let user_key = ctx.accounts.user.key;
-        let mint_key = ctx.accounts.mint.key().clone();
         let state_bump_bytes = state_bump.to_le_bytes();
 
         let vector = vec![
             b"state-account".as_ref(),
             user_key.as_ref(),
-            mint_key.as_ref(),
             state_bump_bytes.as_ref()
         ];
 
@@ -146,51 +146,7 @@ pub mod whirlpool {
         Ok(())
     }
 
-    pub fn stake(ctx: Context<Stake>, state_bump: u8, escrow_bump: u8, pool_bump: u8) -> ProgramResult {
-        let state_account = &mut ctx.accounts.state_account;
-
-        let state_pda = <[u8; 32]>::try_from(state_account.key().as_ref()).unwrap();
-        let state_sender = <[u8; 32]>::try_from(state_account.sender.as_ref()).unwrap();
-        let state_receiver = <[u8; 32]>::try_from(state_account.receiver.as_ref()).unwrap();
-        let state_mint = <[u8; 32]>::try_from(state_account.mint.as_ref()).unwrap();
-        let state_escrow = <[u8; 32]>::try_from(state_account.escrow.as_ref()).unwrap();
-
-        msg!("escrow state withdrawal with PDA {}", hex::encode(state_pda));
-        msg!("escrow state withdrawal with sender {}", hex::encode(state_sender));
-        msg!("escrow state withdrawal with receiver {}", hex::encode(state_receiver));
-        msg!("escrow state withdrawal with mint {}", hex::encode(state_mint));
-        msg!("escrow state withdrawal with escrow {}", hex::encode(state_escrow));
-        msg!("escrow state withdrawal with token amount {}", state_account.token_amount);
-
-        let user_key = ctx.accounts.sender.key;
-        let mint_key = ctx.accounts.mint.key().clone();
-        let state_bump_bytes = state_bump.to_le_bytes();
-
-        let vector = vec![
-            b"state-account".as_ref(),
-            user_key.as_ref(),
-            mint_key.as_ref(),
-            state_bump_bytes.as_ref()
-        ];
-
-        let signer_seeds = vec![vector.as_slice()];
-
-        let transfer_instruction = Transfer {
-            from: ctx.accounts.escrow_account.to_account_info(),
-            to: ctx.accounts.receiver.to_account_info(),
-            authority: state_account.to_account_info()
-        };
-
-        let cpi_context= CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            transfer_instruction,
-            signer_seeds.as_slice()
-        );
-
-        anchor_spl::token::transfer(cpi_context, state_account.token_amount)?;
-
-        state_account.stage = EscrowStage::Complete.to_u8();
-
+    pub fn stake(ctx: Context<Stake>, pool_bump: u8) -> ProgramResult {
         Ok(())
     }
 }
